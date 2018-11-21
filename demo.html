@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Android Serial Polyfill Demo</title>
+</head>
+<body>
+
+<h1>Serial API Polyfill Demo</h1>
+<button id='request-device'>Request Device</button>
+<button id='send'>Send Text(Tx)</button> <input type="text" id="inputText"/>
+<button id='get'>Read(Rx)</button>
+<p>baud rate: <span id="baudrate"/></p>
+<p>stopbits: <span id="stopbits"/></p>
+<p>parity: <span id="parity"/></p>
+<button id='getInfo'>Read fdSerial Options</button>
+<p id='ReceivedText'></p>
+<script src="serial.js"></script>
+
+<script>
+  var mySerial;
+  let receivedText = '';
+  let reader = {};
+  let writer = {};
+
+//if there is already a device that we have been given permission for we can just grab it like this
+  document.addEventListener('DOMContentLoaded', async () => {
+    serial.getPorts().then(async (serialDevices) => {
+      if(serialDevices.length > 0) {
+        //probably want to do some checks here to make sure you get the correct device.  We are just grabbing the first for the demo
+        mySerial = serialDevices[0];
+        await mySerial.open();
+        reader = mySerial.in.getReader();
+        writer = mySerial.out.getWriter();
+      }
+    })
+
+  });
+
+//if we have not gotten permission yet we need to request for the port like this
+  let button = document.getElementById('request-device');
+  button.addEventListener('click', async () => {
+
+    serial.requestPort().then(async (serialPort) => {
+      mySerial = serialPort;
+      await mySerial.open();
+      reader = mySerial.in.getReader();
+      writer = mySerial.out.getWriter();
+    })
+
+
+//the device can also be requested manuallly from the webUSB API and then set manually like this
+    // const filters = [
+    //   { classCode: 10 },
+    // ];
+    //
+    // navigator.usb.requestDevice({ 'filters': filters }).then(
+    //   async (device) => {
+    //     mySerial = new serial.SerialPort(device);
+    //     await mySerial.open();
+    //
+    //     reader = mySerial.in.getReader();
+    //     writer = mySerial.out.getWriter();
+    //   }
+    // );
+  });
+
+  str2ab = function(str) {
+    var buf = new ArrayBuffer(str.length); // 2 bytes for each char
+    var bufView = new Uint8Array(buf);
+    for (var i=0, strLen=str.length; i < strLen; i++) {
+      bufView[i] = str.charCodeAt(i);
+    }
+    return buf;
+  }
+
+  ab2str = function(buf) {
+    return String.fromCharCode.apply(null, new Uint8Array(buf));
+  }
+
+//send the text out after converting it to an array buffer.
+//The conversion function above is simply for ascii.
+//please convert to an array buffer in what ever way fits your application
+  let sendButton = document.getElementById('send');
+  sendButton.addEventListener('click', async () => {
+    writer.ready.then(() => {
+      let inputArrayBuffer = str2ab(document.getElementById("inputText").value);
+      return writer.write(inputArrayBuffer);
+    })
+  });
+//reads a chunk of data from the stream at a max of 64 bytes
+//again we are converting the data assuming it is ascii data
+  let getButton = document.getElementById('get');
+  getButton.addEventListener('click', async () => {
+    reader.read().then(({value}) => {
+        receivedText += ab2str(value.buffer);
+        document.getElementById("ReceivedText").innerHTML= receivedText
+      },
+      error => {console.error('error from read', error)}
+    );
+  });
+
+//this reads the serial settings that are set on the device.
+//Remember, to set these settings with an object that is structured the same as what is returned here
+//using the setOptions(options) functions on your SerialPort instance.
+  let getInfoButton = document.getElementById('getInfo');
+  getInfoButton.addEventListener('click', async () => {
+    mySerial.getInfo().then((results) => {
+      console.log('get info results', results);
+      document.getElementById("baudrate").innerHTML = results.baudrate;
+      document.getElementById("stopbits").innerHTML = results.stopbits;
+      document.getElementById("parity").innerHTML = results.parity;
+    })
+  });
+
+
+</script>
+</body>
+</html>
