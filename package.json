@@ -20,6 +20,6 @@
   "license": "Apache",
   "devDependencies": {
     "eslint": "^5.10.0",
-    "eslint-config-google": "^0.11.0",
+    "eslint-config-google": "^0.11.0"
   }
 }
