@@ -2,9 +2,11 @@
   "name": "serial-polyfill",
   "version": "1.0.4",
   "description": "An implementation of the [Serial API](https://wicg.github.io/serial) on top of the [WebUSB API](https://wicg.github.io/webusb) for use with USB-to-serial adapters. Use of this library is limited to hardware and platforms where the device is accessible via the WebUSB API because it has not been claimed by a built-in device driver. This project will be used to prototype the design of the Serial API.",
-  "main": "serial.js",
+  "main": "./dist/serial.js",
+  "types": "./dist/serial.d.ts",
   "scripts": {
-    "test": "eslint serial.js"
+    "test": "eslint serial.ts",
+    "build": "tsc -d"
   },
   "repository": {
     "type": "git",
@@ -19,7 +21,11 @@
   "author": "James C Hollyer",
   "license": "Apache",
   "devDependencies": {
+    "@types/w3c-web-usb": "^1.0.3",
+    "@typescript-eslint/eslint-plugin": "^1.13.0",
+    "@typescript-eslint/parser": "^1.13.0",
     "eslint": "^5.10.0",
-    "eslint-config-google": "^0.11.0"
+    "eslint-config-google": "^0.11.0",
+    "typescript": "^3.5.3"
   }
 }
