@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "sso://team/deviceapi-team/serial-polyfill"
+    "url": "https://github.com/google/web-serial-polyfill.git"
   },
   "eslintconfig": {
     "extends": [
@@ -20,6 +20,6 @@
   "license": "Apache",
   "devDependencies": {
     "eslint": "^5.10.0",
-    "eslint-config-google": "^0.11.0",
+    "eslint-config-google": "^0.11.0"
   }
 }
