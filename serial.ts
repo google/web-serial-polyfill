@@ -17,10 +17,24 @@
  */
 'use strict';
 
+type ParityType = 'none' | 'even' | 'odd' | 'mark' | 'space';
+
+interface SerialOptions {
+  baudrate: number;
+  databits: number;
+  stopbits: number;
+  parity: ParityType;
+  buffersize: number;
+  rtscts: boolean;
+  xon: boolean;
+  xoff: boolean;
+  xany: boolean;
+}
+
 const kSetControlLineState = 0x22;
 const kGetLineCoding = 0x21;
 const kSetLineCoding = 0x20;
-const kDefaultSerialOptions = {
+const kDefaultSerialOptions: SerialOptions = {
   baudrate: 115200,
   databits: 8,
   stopbits: 1,
@@ -35,29 +49,29 @@ const kAcceptableDataBits = [16, 8, 7, 6, 5];
 const kAcceptableStopBits = [1, 2];
 const kAcceptableParity = ['none', 'even', 'mark', 'odd', 'space'];
 
-const kParityIndexMapping = ['none', 'odd', 'even', 'mark', 'space'];
+const kParityIndexMapping: ParityType[] =
+    ['none', 'odd', 'even', 'mark', 'space'];
 const kStopbitsIndexMapping = [1, 1.5, 2];
 
 /** a class used to control serial devices over WebUSB */
-class SerialPort {
+export class SerialPort {
+  public in: ReadableStream<Uint8Array>;
+  public out: WritableStream<Uint8Array>;
+
+  private transferInterface_: USBInterface;
+  private serialOptions_: SerialOptions;
+  private device_: USBDevice;
+
   /**
    * constructor taking a WebUSB device that creates a SerialPort instance.
    * @param {object} device A device acquired from the WebUSB API
    * @param {object} serialOptions Optional object containing serial options
    */
-  constructor(device, serialOptions = {}) {
-    /** @private {number} */
-    this.transferInterface_ = 0;
-    /** @private {number} */
-    this.controlInterface_ = 0;
-    /** @private {number} */
-    this.serialOptions_ =
-        Object.assign({}, kDefaultSerialOptions, serialOptions);
-    /** @private {object} */
-    this.device_ = {};
-    this.validateOptions_();
+  public constructor(device: USBDevice, serialOptions?: SerialOptions) {
+    this.serialOptions_ = {...kDefaultSerialOptions, ...serialOptions};
+    this.validateOptions();
 
-    this.setPort_(device);
+    this.setPort(device);
   }
 
   /**
@@ -66,13 +80,25 @@ class SerialPort {
    * @return {Promise} A promise that will resolve when device is ready for
    * communication
    */
-  async open() {
+  public async open() {
     try {
       await this.device_.open();
       if (this.device_.configuration === null) {
         await this.device_.selectConfiguration(1);
       }
-      await this.device_.claimInterface(this.controlInterface_.interfaceNumber);
+
+      const transferInterface = this.getTransferInterface(this.device_);
+      if (!transferInterface) {
+        throw new Error('Unable to find data transfer interface.');
+      }
+      this.transferInterface_ = transferInterface;
+
+      const controlInterface = this.getControlInterface(this.device_);
+      if (!controlInterface) {
+        throw new Error('Unable to find control interface.');
+      }
+
+      await this.device_.claimInterface(controlInterface.interfaceNumber);
       await this.device_.claimInterface(
           this.transferInterface_.interfaceNumber);
       await this.setOptions();
@@ -81,11 +107,11 @@ class SerialPort {
         'recipient': 'interface',
         'request': kSetControlLineState,
         'value': 0x01,
-        'index': this.controlInterface_.interfaceNumber,
+        'index': controlInterface.interfaceNumber,
       });
-      this.in = new ReadableStream({start: this.readStart_.bind(this)});
+      this.in = new ReadableStream({start: this.readStart.bind(this)});
       this.out = new WritableStream({
-        write: this.write_.bind(this),
+        write: this.write.bind(this),
       });
     } catch (error) {
       throw new Error('Error setting up device: ' + error.toString());
@@ -97,20 +123,18 @@ class SerialPort {
    * @return {Promise} A promise that will resolve with an object containing
    * the device serial options
    */
-  getInfo() {
-    return this.device_
-        .controlTransferIn(
-            {
-              'requestType': 'class',
-              'recipient': 'interface',
-              'request': kGetLineCoding,
-              'value': 0x00,
-              'index': 0x00,
-            },
-            7)
-        .then((response) => {
-          return this.readLineCoding_(response.data.buffer);
-        });
+  public async getInfo() {
+    const response = await this.device_.controlTransferIn({
+      'requestType': 'class',
+      'recipient': 'interface',
+      'request': kGetLineCoding,
+      'value': 0x00,
+      'index': 0x00,
+    }, 7);
+
+    if (response.status === 'ok') {
+      return this.readLineCoding(response.data!.buffer);
+    }
   }
 
   /**
@@ -118,11 +142,11 @@ class SerialPort {
    * @param {object} options the object which carries serial settings data
    * @return {Promise} A promise that will resolve when the options are set
    */
-  setOptions(options) {
-    const newOptions = Object.assign({}, this.serialOptions_, options);
+  public setOptions(options?: SerialOptions) {
+    const newOptions = {...this.serialOptions_, ...options};
     this.serialOptions_ = newOptions;
-    this.validateOptions_();
-    return this.setSerialOptions_();
+    this.validateOptions();
+    return this.setSerialOptions();
   }
 
   /**
@@ -130,33 +154,31 @@ class SerialPort {
    * proper one for transfer and control
    * @param {object} device A device acquired from the WebUSB API
    */
-  setPort_(device) {
-    if (!SerialPort.isSerialDevice_(device)) {
+  private setPort(device: USBDevice) {
+    if (!SerialPort.isSerialDevice(device)) {
       throw new TypeError('This is not a serial port');
     }
     this.device_ = device;
-    this.transferInterface_ = this.getTransferInterface_(device);
-    this.controlInterface_ = this.getControlInterface_(device);
   }
 
   /**
    * Checks the serial options for validity and throws an error if it is
    * not valid
    */
-  validateOptions_() {
-    if (!this.isValidBaudRate_(this.serialOptions_.baudrate)) {
+  private validateOptions() {
+    if (!this.isValidBaudRate(this.serialOptions_.baudrate)) {
       throw new RangeError('invalid Baud Rate ' + this.serialOptions_.baudrate);
     }
 
-    if (!this.isValidDataBits_(this.serialOptions_.databits)) {
+    if (!this.isValidDataBits(this.serialOptions_.databits)) {
       throw new RangeError('invalid databits ' + this.serialOptions_.databits);
     }
 
-    if (!this.isValidStopBits_(this.serialOptions_.stopbits)) {
+    if (!this.isValidStopBits(this.serialOptions_.stopbits)) {
       throw new RangeError('invalid stopbits ' + this.serialOptions_.stopbits);
     }
 
-    if (!this.isValidParity_(this.serialOptions_.parity)) {
+    if (!this.isValidParity(this.serialOptions_.parity)) {
       throw new RangeError('invalid parity ' + this.serialOptions_.parity);
     }
   }
@@ -166,7 +188,7 @@ class SerialPort {
    * @param {number} baudrate the baud rate to check
    * @return {boolean} A boolean that reflects whether the baud rate is valid
    */
-  isValidBaudRate_(baudrate) {
+  private isValidBaudRate(baudrate: number) {
     return baudrate % 1 === 0;
   }
 
@@ -176,8 +198,8 @@ class SerialPort {
    * @return {boolean} A boolean that reflects whether the data bits setting is
    * valid
    */
-  isValidDataBits_(databits) {
-    return acceptableDataBits.includes(databits);
+  private isValidDataBits(databits: number) {
+    return kAcceptableDataBits.includes(databits);
   }
 
   /**
@@ -186,71 +208,78 @@ class SerialPort {
    * @return {boolean} A boolean that reflects whether the stop bits setting is
    * valid
    */
-  isValidStopBits_(stopbits) {
-    return acceptableStopBits.includes(stopbits);
+  private isValidStopBits(stopbits: number) {
+    return kAcceptableStopBits.includes(stopbits);
   }
 
   /**
    * Checks the parity for validity
-   * @param {number} parity the parity to check
+   * @param {string} parity the parity to check
    * @return {boolean} A boolean that reflects whether the parity is valid
    */
-  isValidParity_(parity) {
-    return acceptableParity.includes(parity);
+  private isValidParity(parity: ParityType) {
+    return kAcceptableParity.includes(parity);
   }
 
   /**
    * The function called by the writable stream upon creation
-   * @param {number} controller The stream controller
+   * @param {WritableStreamDefaultController} controller The stream controller
    * @return {Promise} A Promise that is to be resolved whe this instance is
    * ready to use the writablestream
    */
-  writeStart_(controller) {
-    return new Promise((resolve, reject) => {
-      if (this.device_) {
-        resolve();
-      }
-    });
+  private async writeStart(controller: WritableStreamDefaultController) {
   }
 
   /**
    * The function called by the readable stream upon creation
    * @param {number} controller The stream controller
    */
-  readStart_(controller) {
-    const readLoop = () => {
-      this.device_
-          .transferIn(this.getDirectionEndpoint_('in').endpointNumber, 64)
-          .then(
-              (result) => {
-                controller.enqueue(result.data);
-                readLoop();
-              },
-              (error) => {
-                controller.error(error.toString());
-              });
-    };
-    readLoop();
+  private async readStart(controller: ReadableStreamDefaultController) {
+    const endpoint = this.getDirectionEndpoint('in');
+    if (!endpoint) {
+      controller.error(new Error('No IN endpoint available.'));
+      return;
+    }
+
+    (async () => {
+      try {
+        for (;;) {
+          const result =
+              await this.device_.transferIn(endpoint.endpointNumber, 64);
+          controller.enqueue(result.data);
+        }
+      } catch (error) {
+        controller.error(error.toString());
+      }
+    })();
   }
 
   /**
    * Sends data along the "out" endpoint of this
-   * @param {ArrayBuffer} chunk the data to be sent out
+   * @param {Uint8Array} chunk the data to be sent out
    * @param {Object} controller The Object for the
    * WritableStreamDefaultController used by the WritablSstream API
    * @return {Promise} a promise that will resolve when the data is sent
    */
-  write_(chunk, controller) {
-    if (chunk instanceof ArrayBuffer) {
-      return this.device_
-          .transferOut(this.getDirectionEndpoint_('out').endpointNumber, chunk)
-          .catch((error) => {
-            controller.error(error.toString());
-          });
+  private async write(
+      chunk: Uint8Array,
+      controller: WritableStreamDefaultController) {
+    const endpoint = this.getDirectionEndpoint('out');
+    if (!endpoint) {
+      controller.error(new Error('No OUT endpoint available.'));
+      return;
+    }
+
+    if (chunk instanceof Uint8Array) {
+      try {
+        await this.device_.transferOut(endpoint.endpointNumber, chunk);
+      } catch (error) {
+        controller.error(error.toString());
+      }
     } else {
       throw new TypeError(
-          'Can only send ArrayBuffers please use transform stream to convert ' +
-          'data to ArrayBuffer');
+          'Can only send Uint8Array please use transform stream to convert ' +
+          'data to Uint8Array');
     }
   }
 
@@ -258,7 +287,7 @@ class SerialPort {
    * sends the options alog the control interface to set them on the device
    * @return {Promise} a promise that will resolve when the options are set
    */
-  setSerialOptions_() {
+  private setSerialOptions() {
     return this.device_.controlTransferOut(
         {
           'requestType': 'class',
@@ -267,7 +296,7 @@ class SerialPort {
           'value': 0x00,
           'index': 0x00,
         },
-        this.getLineCodingStructure_());
+        this.getLineCodingStructure());
   }
 
   /**
@@ -276,15 +305,15 @@ class SerialPort {
    * @param {ArrayBuffer} buffer The data structured accoding to the spec
    * @return {object} The options
    */
-  readLineCoding_(buffer) {
-    const options = {};
+  private readLineCoding(buffer: ArrayBuffer) {
+    const options: SerialOptions = this.serialOptions_;
     const view = new DataView(buffer);
     options.baudrate = view.getUint32(0, true);
-    options.stopbits = view.getUint8(4) < stopbitsIndexMapping.length ?
-        stopbitsIndexMapping[view.getUint8(4)] :
+    options.stopbits = view.getUint8(4) < kStopbitsIndexMapping.length ?
+        kStopbitsIndexMapping[view.getUint8(4)] :
         1;
-    options.parity = view.getUint8(5) < parityIndexMapping.length ?
-        parityIndexMapping[view.getUint8(5)] :
+    options.parity = view.getUint8(5) < kParityIndexMapping.length ?
+        kParityIndexMapping[view.getUint8(5)] :
         'none';
     options.databits = view.getUint8(6);
     return options;
@@ -295,13 +324,13 @@ class SerialPort {
    * the USB CDC specification
    * @return {object} The array buffer with the Line Coding structure
    */
-  getLineCodingStructure_() {
+  private getLineCodingStructure() {
     const buffer = new ArrayBuffer(7);
     const view = new DataView(buffer);
     view.setUint32(0, this.serialOptions_.baudrate, true);
     view.setUint8(
-        4, stopbitsIndexMapping.indexOf(this.serialOptions_.stopbits));
-    view.setUint8(5, parityIndexMapping.indexOf(this.serialOptions_.parity));
+        4, kStopbitsIndexMapping.indexOf(this.serialOptions_.stopbits));
+    view.setUint8(5, kParityIndexMapping.indexOf(this.serialOptions_.parity));
     view.setUint8(6, this.serialOptions_.databits);
     return buffer;
   }
@@ -313,7 +342,7 @@ class SerialPort {
    * @return {boolean} the boolean indicating whether the device is structured
    * as a serial device
    */
-  static isSerialDevice_(device) {
+  public static isSerialDevice(device: USBDevice) {
     if (!(device.configurations instanceof Array)) {
       return false;
     }
@@ -346,8 +375,8 @@ class SerialPort {
    * @return {object} The interface Object created from the WebUSB API that is
    * expected to handle the control of the Serial Device
    */
-  getControlInterface_(device) {
-    return this.getInterfaceWithClass_(device, 2);
+  private getControlInterface(device: USBDevice): USBInterface | undefined {
+    return this.getInterfaceWithClass(device, 2);
   }
 
   /**
@@ -356,8 +385,8 @@ class SerialPort {
    * @return {object} The interface Object created from the WebUSB API that is
    * expected to handle the transfer of data.
    */
-  getTransferInterface_(device) {
-    return this.getInterfaceWithClass_(device, 10);
+  private getTransferInterface(device: USBDevice): USBInterface | undefined {
+    return this.getInterfaceWithClass(device, 10);
   }
 
   /**
@@ -367,9 +396,9 @@ class SerialPort {
    * @return {object} The interface Object created from the WebUSB API that is
    * has the specified classNumber
    */
-  getInterfaceWithClass_(device, classNumber) {
+  private getInterfaceWithClass(device: USBDevice, classNumber: number) {
     let interfaceWithClass;
-    device.configuration.interfaces.forEach((deviceInterface) => {
+    device.configuration!.interfaces.forEach((deviceInterface) => {
       deviceInterface.alternates.forEach((alternate) => {
         if (alternate.interfaceClass === classNumber) {
           interfaceWithClass = deviceInterface;
@@ -387,7 +416,8 @@ class SerialPort {
    * @return {object} The Endpoint Object created from the WebUSB API that is
    * has the specified direction
    */
-  getDirectionEndpoint_(direction) {
+  private getDirectionEndpoint(direction: USBDirection):
+      USBEndpoint | undefined {
     let correctEndpoint;
     this.transferInterface_.alternates.forEach((alternate) => {
       alternate.endpoints.forEach((endpoint) => {
@@ -400,37 +430,30 @@ class SerialPort {
   }
 }
 
-/* an object to be used for starting the serial workflow */
-const serial = {
-  requestPort: function() {
+/** implementation of the global navigator.serial object */
+class Serial {
+  /** requests permission to access a new port */
+  async requestPort() {
     const filters = [
       {classCode: 10},
     ];
-    return navigator.usb.requestDevice({'filters': filters})
-        .then(async (device) => {
-          const port = new SerialPort(device);
-          return port;
-        });
-  },
-
-  SerialPort: SerialPort,
-  getPorts: function() {
-    return navigator.usb.getDevices().then((devices) => {
-      const serialDevices = [];
-      devices.forEach((device) => {
-        if (SerialPort.isSerialDevice_(device)) {
-          serialDevices.push(new SerialPort(device));
-        }
-      });
-      return serialDevices;
-    });
-  },
-};
-
-/* eslint-disable no-undef */
-if (typeof exports !== 'undefined') {
-  if (typeof module !== 'undefined' && module.exports) {
-    exports = module.exports = serial;
+    const device = await navigator.usb.requestDevice({'filters': filters});
+    const port = new SerialPort(device);
+    return port;
   }
-  exports.serial = serial;
+
+  /** gets the list of available ports */
+  async getPorts() {
+    const devices = await navigator.usb.getDevices();
+    const serialDevices: SerialPort[] = [];
+    devices.forEach((device) => {
+      if (SerialPort.isSerialDevice(device)) {
+        serialDevices.push(new SerialPort(device));
+      }
+    });
+    return serialDevices;
+  }
 }
+
+/* an object to be used for starting the serial workflow */
+export const serial = new Serial();
