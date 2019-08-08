@@ -59,7 +59,6 @@ export class SerialPort {
   public out: WritableStream<Uint8Array>;
 
   private transferInterface_: USBInterface;
-  private controlInterface_: USBInterface;
   private serialOptions_: SerialOptions;
   private device_: USBDevice;
 
@@ -87,7 +86,19 @@ export class SerialPort {
       if (this.device_.configuration === null) {
         await this.device_.selectConfiguration(1);
       }
-      await this.device_.claimInterface(this.controlInterface_.interfaceNumber);
+
+      const transferInterface = this.getTransferInterface(this.device_);
+      if (!transferInterface) {
+        throw new Error('Unable to find data transfer interface.');
+      }
+      this.transferInterface_ = transferInterface;
+
+      const controlInterface = this.getControlInterface(this.device_);
+      if (!controlInterface) {
+        throw new Error('Unable to find control interface.');
+      }
+
+      await this.device_.claimInterface(controlInterface.interfaceNumber);
       await this.device_.claimInterface(
           this.transferInterface_.interfaceNumber);
       await this.setOptions();
@@ -96,9 +107,9 @@ export class SerialPort {
         'recipient': 'interface',
         'request': kSetControlLineState,
         'value': 0x01,
-        'index': this.controlInterface_.interfaceNumber,
+        'index': controlInterface.interfaceNumber,
       });
-      this.in = new ReadableStream({start: this.readStart_.bind(this)});
+      this.in = new ReadableStream({start: this.readStart.bind(this)});
       this.out = new WritableStream({
         write: this.write.bind(this),
       });
@@ -148,18 +159,6 @@ export class SerialPort {
       throw new TypeError('This is not a serial port');
     }
     this.device_ = device;
-
-    const transferInterface = this.getTransferInterface(device);
-    if (!transferInterface) {
-      throw new Error('Unable to find data transfer interface.');
-    }
-    this.transferInterface_ = transferInterface;
-
-    const controlInterface = this.getControlInterface(device);
-    if (!controlInterface) {
-      throw new Error('Unable to find control interface.');
-    }
-    this.controlInterface_ = controlInterface;
   }
 
   /**
@@ -235,7 +234,7 @@ export class SerialPort {
    * The function called by the readable stream upon creation
    * @param {number} controller The stream controller
    */
-  private async readStart_(controller: ReadableStreamDefaultController) {
+  private async readStart(controller: ReadableStreamDefaultController) {
     const endpoint = this.getDirectionEndpoint('in');
     if (!endpoint) {
       controller.error(new Error('No IN endpoint available.'));
@@ -376,7 +375,7 @@ export class SerialPort {
    * @return {object} The interface Object created from the WebUSB API that is
    * expected to handle the control of the Serial Device
    */
-  private getControlInterface(device: USBDevice) {
+  private getControlInterface(device: USBDevice): USBInterface | undefined {
     return this.getInterfaceWithClass(device, 2);
   }
 
@@ -386,7 +385,7 @@ export class SerialPort {
    * @return {object} The interface Object created from the WebUSB API that is
    * expected to handle the transfer of data.
    */
-  private getTransferInterface(device: USBDevice) {
+  private getTransferInterface(device: USBDevice): USBInterface | undefined {
     return this.getInterfaceWithClass(device, 10);
   }
 
