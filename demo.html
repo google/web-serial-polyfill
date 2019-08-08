@@ -46,8 +46,8 @@
         //probably want to do some checks here to make sure you get the correct device.  We are just grabbing the first for the demo
         mySerial = serialDevices[0];
         await mySerial.open();
-        reader = mySerial.in.getReader();
-        writer = mySerial.out.getWriter();
+        reader = mySerial.readable.getReader();
+        writer = mySerial.writable.getWriter();
       }
     })
 
@@ -60,8 +60,8 @@
     serial.requestPort().then(async (serialPort) => {
       mySerial = serialPort;
       await mySerial.open();
-      reader = mySerial.in.getReader();
-      writer = mySerial.out.getWriter();
+      reader = mySerial.readable.getReader();
+      writer = mySerial.writable.getWriter();
     })
 
 
@@ -75,8 +75,8 @@
     //     mySerial = new serial.SerialPort(device);
     //     await mySerial.open();
     //
-    //     reader = mySerial.in.getReader();
-    //     writer = mySerial.out.getWriter();
+    //     reader = mySerial.readable.getReader();
+    //     writer = mySerial.writable.getWriter();
     //   }
     // );
   });
