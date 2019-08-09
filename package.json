@@ -5,7 +5,7 @@
   "main": "./dist/serial.js",
   "types": "./dist/serial.d.ts",
   "scripts": {
-    "test": "eslint serial.ts",
+    "lint": "eslint serial.ts",
     "build": "tsc -d"
   },
   "repository": {
