@@ -55,8 +55,8 @@ const kStopbitsIndexMapping = [1, 1.5, 2];
 
 /** a class used to control serial devices over WebUSB */
 export class SerialPort {
-  public in: ReadableStream<Uint8Array>;
-  public out: WritableStream<Uint8Array>;
+  public readable: ReadableStream<Uint8Array>;
+  public writable: WritableStream<Uint8Array>;
 
   private transferInterface_: USBInterface;
   private serialOptions_: SerialOptions;
@@ -109,8 +109,8 @@ export class SerialPort {
         'value': 0x01,
         'index': controlInterface.interfaceNumber,
       });
-      this.in = new ReadableStream({start: this.readStart.bind(this)});
-      this.out = new WritableStream({
+      this.readable = new ReadableStream({start: this.readStart.bind(this)});
+      this.writable = new WritableStream({
         write: this.write.bind(this),
       });
     } catch (error) {
