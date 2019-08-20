@@ -65,10 +65,8 @@ export class SerialPort {
   /**
    * constructor taking a WebUSB device that creates a SerialPort instance.
    * @param {object} device A device acquired from the WebUSB API
-   * @param {object} serialOptions Optional object containing serial options
    */
-  public constructor(device: USBDevice, serialOptions?: SerialOptions) {
-    this.serialOptions_ = {...kDefaultSerialOptions, ...serialOptions};
+  public constructor(device: USBDevice) {
     this.validateOptions();
 
     this.setPort(device);
@@ -77,10 +75,12 @@ export class SerialPort {
   /**
    * a function that opens the device and claims all interfaces needed to
    * control and communicate to and from the serial device
+   * @param {object} serialOptions Optional object containing serial options
    * @return {Promise} A promise that will resolve when device is ready for
    * communication
    */
-  public async open() {
+  public async open(serialOptions?: SerialOptions) {
+    this.serialOptions_ = {...kDefaultSerialOptions, ...serialOptions};
     try {
       await this.device_.open();
       if (this.device_.configuration === null) {
