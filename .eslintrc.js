@@ -17,7 +17,12 @@
  */
 
 module.exports = {
-  "extends": ["eslint:recommended", "google"],
+  "extends": [
+      "eslint:recommended",
+      "plugin:@typescript-eslint/eslint-recommended",
+      "plugin:@typescript-eslint/recommended",
+      "google"
+  ],
   "env": {
       "browser": true,
       "es6": true
