@@ -60,7 +60,7 @@ export interface SerialPortRequestOptions {
 const kSetLineCoding = 0x20;
 const kGetLineCoding = 0x21;
 const kSetControlLineState = 0x22;
-const kSetBreak = 0x23;
+const kSendBreak = 0x23;
 
 const kDefaultSerialOptions: SerialOptions = {
   baudrate: 115200,
@@ -126,7 +126,10 @@ function findEndpoint(iface: USBInterface, direction: USBDirection):
 }
 
 /**
- * Implementation of UnderlyingSource for USB devices.
+ * Implementation of the underlying source API[1] which reads data from a USB
+ * endpoint. This can be used to construct a ReadableStream.
+ *
+ * [1]: https://streams.spec.whatwg.org/#underlying-source-api
  */
 class UsbEndpointUnderlyingSource implements UnderlyingSource<Uint8Array> {
   private device_: USBDevice;
@@ -162,7 +165,10 @@ class UsbEndpointUnderlyingSource implements UnderlyingSource<Uint8Array> {
 }
 
 /**
- * Implementation of UnderlyingSink for USB devices.
+ * Implementation of the underlying sink API[2] which writes data to a USB
+ * endpoint. This can be used to construct a WritableStream.
+ *
+ * [2]: https://streams.spec.whatwg.org/#underlying-sink-api
  */
 class UsbEndpointUnderlyingSink implements UnderlyingSink<Uint8Array> {
   private device_: USBDevice;
@@ -289,7 +295,18 @@ export class SerialPort {
    * closed.
    */
   public async close(): Promise<void> {
-    await Promise.all([this.readable.cancel(), this.writable.abort()]);
+    if (!this.device_.opened) {
+      throw new DOMException('InvalidStateError', 'Port not open.');
+    }
+
+    const promises = [];
+    if (this.readable) {
+      promises.push(this.readable.cancel());
+    }
+    if (this.writable) {
+      promises.push(this.writable.abort());
+    }
+    await Promise.all(promises);
     await this.setSignals({dtr: false});
     await this.device_.close();
   }
@@ -300,6 +317,7 @@ export class SerialPort {
    * containing the device serial options
    */
   public async getInfo(): Promise<SerialOptions> {
+    // Ref: USB CDC specification version 1.1 §6.2.13.
     const response = await this.device_.controlTransferIn({
       'requestType': 'class',
       'recipient': 'interface',
@@ -336,6 +354,10 @@ export class SerialPort {
     this.outputSignals_ = {...this.outputSignals_, ...signals};
 
     if (signals.dtr !== undefined || signals.rts !== undefined) {
+      // The Set_Control_Line_State command expects a bitmap containing the
+      // values of all output signals that should be enabled or disabled.
+      //
+      // Ref: USB CDC specification version 1.1 §6.2.14.
       const value = (this.outputSignals_.dtr ? 1 << 0 : 0) |
                     (this.outputSignals_.rts ? 1 << 1 : 0);
 
@@ -349,12 +371,17 @@ export class SerialPort {
     }
 
     if (signals.brk !== undefined) {
+      // The SendBreak command expects to be given a duration for how long the
+      // break signal should be asserted. Passing 0xFFFF enables the signal
+      // until 0x0000 is send.
+      //
+      // Ref: USB CDC specification version 1.1 §6.2.15.
       const value = this.outputSignals_.brk ? 0xFFFF : 0x0000;
 
       await this.device_.controlTransferOut({
         'requestType': 'class',
         'recipient': 'interface',
-        'request': kSetBreak,
+        'request': kSendBreak,
         'value': value,
         'index': this.controlInterface_.interfaceNumber,
       });
@@ -426,6 +453,7 @@ export class SerialPort {
    * @return {Promise} a promise that will resolve when the options are set
    */
   private async setLineCoding(): Promise<void> {
+    // Ref: USB CDC specification version 1.1 §6.2.12.
     const buffer = new ArrayBuffer(7);
     const view = new DataView(buffer);
     view.setUint32(0, this.serialOptions_.baudrate, true);
