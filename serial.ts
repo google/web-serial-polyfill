@@ -134,6 +134,7 @@ function findEndpoint(iface: USBInterface, direction: USBDirection):
 class UsbEndpointUnderlyingSource implements UnderlyingSource<Uint8Array> {
   private device_: USBDevice;
   private endpoint_: USBEndpoint;
+  private onError_: () => void;
 
   /**
    * Constructs a new UnderlyingSource that will pull data from the specified
@@ -141,10 +142,12 @@ class UsbEndpointUnderlyingSource implements UnderlyingSource<Uint8Array> {
    *
    * @param {USBDevice} device
    * @param {USBEndpoint} endpoint
+   * @param {function} onError function to be called on error
    */
-  constructor(device: USBDevice, endpoint: USBEndpoint) {
+  constructor(device: USBDevice, endpoint: USBEndpoint, onError: () => void) {
     this.device_ = device;
     this.endpoint_ = endpoint;
+    this.onError_ = onError;
   }
 
   /**
@@ -160,6 +163,7 @@ class UsbEndpointUnderlyingSource implements UnderlyingSource<Uint8Array> {
         },
         (error) => {
           controller.error(error.toString());
+          this.onError_();
         });
   }
 }
@@ -173,6 +177,7 @@ class UsbEndpointUnderlyingSource implements UnderlyingSource<Uint8Array> {
 class UsbEndpointUnderlyingSink implements UnderlyingSink<Uint8Array> {
   private device_: USBDevice;
   private endpoint_: USBEndpoint;
+  private onError_: () => void;
 
   /**
    * Constructs a new UnderlyingSink that will write data to the specified
@@ -180,10 +185,12 @@ class UsbEndpointUnderlyingSink implements UnderlyingSink<Uint8Array> {
    *
    * @param {USBDevice} device
    * @param {USBEndpoint} endpoint
+   * @param {function} onError function to be called on error
    */
-  constructor(device: USBDevice, endpoint: USBEndpoint) {
+  constructor(device: USBDevice, endpoint: USBEndpoint, onError: () => void) {
     this.device_ = device;
     this.endpoint_ = endpoint;
+    this.onError_ = onError;
   }
 
   /**
@@ -196,25 +203,31 @@ class UsbEndpointUnderlyingSink implements UnderlyingSink<Uint8Array> {
       chunk: Uint8Array,
       controller: WritableStreamDefaultController): Promise<void> {
     try {
-      await this.device_.transferOut(this.endpoint_.endpointNumber, chunk);
+      const result =
+          await this.device_.transferOut(this.endpoint_.endpointNumber, chunk);
+      if (result.status != 'ok') {
+        controller.error(result.status);
+        this.onError_();
+      }
     } catch (error) {
       controller.error(error.toString());
+      this.onError_();
     }
   }
 }
 
 /** a class used to control serial devices over WebUSB */
 export class SerialPort {
-  public readable: ReadableStream<Uint8Array>;
-  public writable: WritableStream<Uint8Array>;
-
   private polyfillOptions_: SerialPolyfillOptions;
   private device_: USBDevice;
   private controlInterface_: USBInterface;
   private transferInterface_: USBInterface;
   private inEndpoint_: USBEndpoint;
   private outEndpoint_: USBEndpoint;
+
   private serialOptions_: SerialOptions;
+  private readable_: ReadableStream<Uint8Array> | null;
+  private writable_: WritableStream<Uint8Array> | null;
   private outputSignals_: SerialOutputSignals;
 
   /**
@@ -245,6 +258,44 @@ export class SerialPort {
   }
 
   /**
+   * Getter for the readable attribute. Constructs a new ReadableStream as
+   * necessary.
+   * @return {ReadableStream} the current readable stream
+   */
+  public get readable(): ReadableStream<Uint8Array> | null {
+    if (!this.readable_ && this.device_.opened) {
+      this.readable_ = new ReadableStream(
+          new UsbEndpointUnderlyingSource(
+              this.device_, this.inEndpoint_, () => {
+                this.readable_ = null;
+              }),
+          new ByteLengthQueuingStrategy({
+            highWaterMark: this.serialOptions_.buffersize,
+          }));
+    }
+    return this.readable_;
+  }
+
+  /**
+   * Getter for the writable attribute. Constructs a new WritableStream as
+   * necessary.
+   * @return {WritableStream} the current writable stream
+   */
+  public get writable(): WritableStream<Uint8Array> | null {
+    if (!this.writable_ && this.device_.opened) {
+      this.writable_ = new WritableStream(
+          new UsbEndpointUnderlyingSink(
+              this.device_, this.outEndpoint_, () => {
+                this.writable_ = null;
+              }),
+          new ByteLengthQueuingStrategy({
+            highWaterMark: this.serialOptions_.buffersize,
+          }));
+    }
+    return this.writable_;
+  }
+
+  /**
    * a function that opens the device and claims all interfaces needed to
    * control and communicate to and from the serial device
    * @param {SerialOptions} options Optional object containing serial options
@@ -269,17 +320,6 @@ export class SerialPort {
 
       await this.setLineCoding();
       await this.setSignals({dtr: true});
-
-      this.readable = new ReadableStream(
-          new UsbEndpointUnderlyingSource(this.device_, this.inEndpoint_),
-          new ByteLengthQueuingStrategy({
-            highWaterMark: this.serialOptions_.buffersize,
-          }));
-      this.writable = new WritableStream(
-          new UsbEndpointUnderlyingSink(this.device_, this.outEndpoint_),
-          new ByteLengthQueuingStrategy({
-            highWaterMark: this.serialOptions_.buffersize,
-          }));
     } catch (error) {
       if (this.device_.opened) {
         await this.device_.close();
@@ -295,20 +335,20 @@ export class SerialPort {
    * closed.
    */
   public async close(): Promise<void> {
-    if (!this.device_.opened) {
-      throw new DOMException('InvalidStateError', 'Port not open.');
-    }
-
     const promises = [];
-    if (this.readable) {
-      promises.push(this.readable.cancel());
+    if (this.readable_) {
+      promises.push(this.readable_.cancel());
     }
-    if (this.writable) {
-      promises.push(this.writable.abort());
+    if (this.writable_) {
+      promises.push(this.writable_.abort());
     }
     await Promise.all(promises);
-    await this.setSignals({dtr: false});
-    await this.device_.close();
+    this.readable_ = null;
+    this.writable_ = null;
+    if (this.device_.opened) {
+      await this.setSignals({dtr: false});
+      await this.device_.close();
+    }
   }
 
   /**
