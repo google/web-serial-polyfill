@@ -346,7 +346,7 @@ export class SerialPort {
     this.readable_ = null;
     this.writable_ = null;
     if (this.device_.opened) {
-      await this.setSignals({dtr: false});
+      await this.setSignals({dtr: false, rts: false});
       await this.device_.close();
     }
   }
