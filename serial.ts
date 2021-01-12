@@ -20,11 +20,11 @@
 type ParityType = 'none' | 'even' | 'odd' | 'mark' | 'space';
 
 interface SerialOptions {
-  baudrate: number;
-  databits: number;
-  stopbits: number;
+  baudRate: number;
+  dataBits: number;
+  stopBits: number;
   parity: ParityType;
-  buffersize: number;
+  bufferSize: number;
   rtscts: boolean;
   xon: boolean;
   xoff: boolean;
@@ -63,11 +63,11 @@ const kSetControlLineState = 0x22;
 const kSendBreak = 0x23;
 
 const kDefaultSerialOptions: SerialOptions = {
-  baudrate: 115200,
-  databits: 8,
-  stopbits: 1,
+  baudRate: 115200,
+  dataBits: 8,
+  stopBits: 1,
   parity: 'none',
-  buffersize: 255,
+  bufferSize: 255,
   rtscts: false,
   xon: false,
   xoff: false,
@@ -79,7 +79,7 @@ const kAcceptableParity = ['none', 'even', 'mark', 'odd', 'space'];
 
 const kParityIndexMapping: ParityType[] =
     ['none', 'odd', 'even', 'mark', 'space'];
-const kStopbitsIndexMapping = [1, 1.5, 2];
+const kStopBitsIndexMapping = [1, 1.5, 2];
 
 const kDefaultPolyfillOptions = {
   protocol: SerialPolyfillProtocol.UsbCdcAcm,
@@ -270,7 +270,7 @@ export class SerialPort {
                 this.readable_ = null;
               }),
           new ByteLengthQueuingStrategy({
-            highWaterMark: this.serialOptions_.buffersize,
+            highWaterMark: this.serialOptions_.bufferSize,
           }));
     }
     return this.readable_;
@@ -289,7 +289,7 @@ export class SerialPort {
                 this.writable_ = null;
               }),
           new ByteLengthQueuingStrategy({
-            highWaterMark: this.serialOptions_.buffersize,
+            highWaterMark: this.serialOptions_.bufferSize,
           }));
     }
     return this.writable_;
@@ -433,16 +433,16 @@ export class SerialPort {
    * not valid
    */
   private validateOptions(): void {
-    if (!this.isValidBaudRate(this.serialOptions_.baudrate)) {
-      throw new RangeError('invalid Baud Rate ' + this.serialOptions_.baudrate);
+    if (!this.isValidBaudRate(this.serialOptions_.baudRate)) {
+      throw new RangeError('invalid Baud Rate ' + this.serialOptions_.baudRate);
     }
 
-    if (!this.isValidDataBits(this.serialOptions_.databits)) {
-      throw new RangeError('invalid databits ' + this.serialOptions_.databits);
+    if (!this.isValidDataBits(this.serialOptions_.dataBits)) {
+      throw new RangeError('invalid dataBits ' + this.serialOptions_.dataBits);
     }
 
-    if (!this.isValidStopBits(this.serialOptions_.stopbits)) {
-      throw new RangeError('invalid stopbits ' + this.serialOptions_.stopbits);
+    if (!this.isValidStopBits(this.serialOptions_.stopBits)) {
+      throw new RangeError('invalid stopBits ' + this.serialOptions_.stopBits);
     }
 
     if (!this.isValidParity(this.serialOptions_.parity)) {
@@ -452,31 +452,31 @@ export class SerialPort {
 
   /**
    * Checks the baud rate for validity
-   * @param {number} baudrate the baud rate to check
+   * @param {number} baudRate the baud rate to check
    * @return {boolean} A boolean that reflects whether the baud rate is valid
    */
-  private isValidBaudRate(baudrate: number): boolean {
-    return baudrate % 1 === 0;
+  private isValidBaudRate(baudRate: number): boolean {
+    return baudRate % 1 === 0;
   }
 
   /**
    * Checks the data bits for validity
-   * @param {number} databits the data bits to check
+   * @param {number} dataBits the data bits to check
    * @return {boolean} A boolean that reflects whether the data bits setting is
    * valid
    */
-  private isValidDataBits(databits: number): boolean {
-    return kAcceptableDataBits.includes(databits);
+  private isValidDataBits(dataBits: number): boolean {
+    return kAcceptableDataBits.includes(dataBits);
   }
 
   /**
    * Checks the stop bits for validity
-   * @param {number} stopbits the stop bits to check
+   * @param {number} stopBits the stop bits to check
    * @return {boolean} A boolean that reflects whether the stop bits setting is
    * valid
    */
-  private isValidStopBits(stopbits: number): boolean {
-    return kAcceptableStopBits.includes(stopbits);
+  private isValidStopBits(stopBits: number): boolean {
+    return kAcceptableStopBits.includes(stopBits);
   }
 
   /**
@@ -496,11 +496,11 @@ export class SerialPort {
     // Ref: USB CDC specification version 1.1 §6.2.12.
     const buffer = new ArrayBuffer(7);
     const view = new DataView(buffer);
-    view.setUint32(0, this.serialOptions_.baudrate, true);
+    view.setUint32(0, this.serialOptions_.baudRate, true);
     view.setUint8(
-        4, kStopbitsIndexMapping.indexOf(this.serialOptions_.stopbits));
+        4, kStopBitsIndexMapping.indexOf(this.serialOptions_.stopBits));
     view.setUint8(5, kParityIndexMapping.indexOf(this.serialOptions_.parity));
-    view.setUint8(6, this.serialOptions_.databits);
+    view.setUint8(6, this.serialOptions_.dataBits);
 
     const result = await this.device_.controlTransferOut({
       'requestType': 'class',
@@ -523,14 +523,14 @@ export class SerialPort {
   private readLineCoding(buffer: ArrayBuffer): SerialOptions {
     const options: SerialOptions = this.serialOptions_;
     const view = new DataView(buffer);
-    options.baudrate = view.getUint32(0, true);
-    options.stopbits = view.getUint8(4) < kStopbitsIndexMapping.length ?
-        kStopbitsIndexMapping[view.getUint8(4)] :
+    options.baudRate = view.getUint32(0, true);
+    options.stopBits = view.getUint8(4) < kStopBitsIndexMapping.length ?
+        kStopBitsIndexMapping[view.getUint8(4)] :
         1;
     options.parity = view.getUint8(5) < kParityIndexMapping.length ?
         kParityIndexMapping[view.getUint8(5)] :
         'none';
-    options.databits = view.getUint8(6);
+    options.dataBits = view.getUint8(6);
     return options;
   }
 }
