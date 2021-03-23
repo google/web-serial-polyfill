@@ -17,12 +17,6 @@
  */
 'use strict';
 
-interface SerialOutputSignals {
-  dtr?: boolean;
-  rts?: boolean;
-  brk?: boolean;
-}
-
 export enum SerialPolyfillProtocol {
   UsbCdcAcm,
 }
@@ -210,9 +204,9 @@ export class SerialPort {
       polyfillOptions?: SerialPolyfillOptions) {
     this.polyfillOptions_ = {...kDefaultPolyfillOptions, ...polyfillOptions};
     this.outputSignals_ = {
-      dtr: false,
-      rts: false,
-      brk: false,
+      dataTerminalReady: false,
+      requestToSend: false,
+      break: false,
     };
 
     this.device_ = device;
@@ -288,7 +282,7 @@ export class SerialPort {
       }
 
       await this.setLineCoding();
-      await this.setSignals({dtr: true});
+      await this.setSignals({dataTerminalReady: true});
     } catch (error) {
       if (this.device_.opened) {
         await this.device_.close();
@@ -315,7 +309,7 @@ export class SerialPort {
     this.readable_ = null;
     this.writable_ = null;
     if (this.device_.opened) {
-      await this.setSignals({dtr: false, rts: false});
+      await this.setSignals({dataTerminalReady: false, requestToSend: false});
       await this.device_.close();
     }
   }
@@ -352,13 +346,14 @@ export class SerialPort {
   public async setSignals(signals: SerialOutputSignals): Promise<void> {
     this.outputSignals_ = {...this.outputSignals_, ...signals};
 
-    if (signals.dtr !== undefined || signals.rts !== undefined) {
+    if (signals.dataTerminalReady !== undefined ||
+        signals.requestToSend !== undefined) {
       // The Set_Control_Line_State command expects a bitmap containing the
       // values of all output signals that should be enabled or disabled.
       //
       // Ref: USB CDC specification version 1.1 §6.2.14.
-      const value = (this.outputSignals_.dtr ? 1 << 0 : 0) |
-                    (this.outputSignals_.rts ? 1 << 1 : 0);
+      const value = (this.outputSignals_.dataTerminalReady ? 1 << 0 : 0) |
+                    (this.outputSignals_.requestToSend ? 1 << 1 : 0);
 
       await this.device_.controlTransferOut({
         'requestType': 'class',
@@ -369,13 +364,13 @@ export class SerialPort {
       });
     }
 
-    if (signals.brk !== undefined) {
+    if (signals.break !== undefined) {
       // The SendBreak command expects to be given a duration for how long the
       // break signal should be asserted. Passing 0xFFFF enables the signal
       // until 0x0000 is send.
       //
       // Ref: USB CDC specification version 1.1 §6.2.15.
-      const value = this.outputSignals_.brk ? 0xFFFF : 0x0000;
+      const value = this.outputSignals_.break ? 0xFFFF : 0x0000;
 
       await this.device_.controlTransferOut({
         'requestType': 'class',
