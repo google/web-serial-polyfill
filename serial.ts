@@ -600,6 +600,29 @@ class Serial {
     });
     return ports;
   }
+
+  /**
+   * Attach an event listener.
+   *
+   * @param {string} event the event to listen for.
+   * @param {Function} handleEvent the function to be triggered on the event.
+   */
+  addEventListener(event: 'connect' | 'disconnect',
+      handleEvent: EventListener | EventListenerObject | null): void {
+    navigator.usb.addEventListener(event, handleEvent);
+  }
+
+  /**
+   * Remove an event listener.
+   *
+   * @param {string} event the event for which the listener should be removed.
+   * @param {Function} handleEvent the handler to be removed.
+   */
+  removeEventListener(event: 'connect' | 'disconnect',
+      handleEvent: EventListener | EventListenerObject | null):
+      void {
+    navigator.usb.removeEventListener(event, handleEvent);
+  }
 }
 
 /* an object to be used for starting the serial workflow */
