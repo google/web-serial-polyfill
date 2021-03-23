@@ -37,6 +37,11 @@ interface SerialOutputSignals {
   brk?: boolean;
 }
 
+interface SerialPortInfo {
+  usbVendorId?: number;
+  usbProductId?: number;
+}
+
 export enum SerialPolyfillProtocol {
   UsbCdcAcm,
 }
@@ -58,7 +63,6 @@ export interface SerialPortRequestOptions {
 }
 
 const kSetLineCoding = 0x20;
-const kGetLineCoding = 0x21;
 const kSetControlLineState = 0x22;
 const kSendBreak = 0x23;
 
@@ -352,24 +356,14 @@ export class SerialPort {
   }
 
   /**
-   * A function used the get the options directoly from the device
-   * @return {Promise<SerialOptions>} A promise that will resolve with an object
-   * containing the device serial options
+   * A function that returns properties of the device.
+   * @return {SerialPortInfo} Device properties.
    */
-  public async getInfo(): Promise<SerialOptions> {
-    // Ref: USB CDC specification version 1.1 §6.2.13.
-    const response = await this.device_.controlTransferIn({
-      'requestType': 'class',
-      'recipient': 'interface',
-      'request': kGetLineCoding,
-      'value': 0x00,
-      'index': this.controlInterface_.interfaceNumber,
-    }, 7);
-
-    if (response.status === 'ok' && response.data) {
-      return this.readLineCoding(response.data.buffer);
-    }
-    throw new DOMException('NetworkError', 'Failed to get serial line coding.');
+  public getInfo(): SerialPortInfo {
+    return {
+      usbVendorId: this.device_.vendorId,
+      usbProductId: this.device_.productId,
+    };
   }
 
   /**

@@ -26,14 +26,16 @@
 <button id='request-device'>Request Device</button>
 <button id='send'>Send Text(Tx)</button> <input type="text" id="inputText"/>
 <button id='get'>Read(Rx)</button>
-<p>baud rate: <span id="baudrate"/></p>
-<p>stopbits: <span id="stopbits"/></p>
-<p>parity: <span id="parity"/></p>
-<button id='getInfo'>Read fdSerial Options</button>
+<p>USB vendor ID: <span id="usbVendorId"/></p>
+<p>USB product ID: <span id="usbProductId"/></p>
+<button id='getInfo'>Get Serial Info</button>
 <p id='ReceivedText'></p>
-<script src="serial.js"></script>
+<script>var exports = {};</script>
+<script src="dist/serial.js"></script>
 
 <script>
+  var serial = exports.serial;
+
   var mySerial;
   let receivedText = '';
   let reader = {};
@@ -116,17 +118,13 @@
     );
   });
 
-//this reads the serial settings that are set on the device.
-//Remember, to set these settings with an object that is structured the same as what is returned here
-//using the setOptions(options) functions on your SerialPort instance.
+//this reads the properties of the serial device
   let getInfoButton = document.getElementById('getInfo');
-  getInfoButton.addEventListener('click', async () => {
-    mySerial.getInfo().then((results) => {
-      console.log('get info results', results);
-      document.getElementById("baudrate").innerHTML = results.baudrate;
-      document.getElementById("stopbits").innerHTML = results.stopbits;
-      document.getElementById("parity").innerHTML = results.parity;
-    })
+  getInfoButton.addEventListener('click', () => {
+    const results = mySerial.getInfo();
+    console.log('get info results', results);
+    document.getElementById("usbVendorId").textContent = results.usbVendorId;
+    document.getElementById("usbProductId").textContent = results.usbProductId;
   });
 
 
