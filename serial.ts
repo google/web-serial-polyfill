@@ -37,11 +37,6 @@ interface SerialOutputSignals {
   brk?: boolean;
 }
 
-interface SerialPortInfo {
-  usbVendorId?: number;
-  usbProductId?: number;
-}
-
 export enum SerialPolyfillProtocol {
   UsbCdcAcm,
 }
