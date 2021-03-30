@@ -47,16 +47,6 @@ export interface SerialPolyfillOptions {
   usbTransferInterfaceClass?: number;
 }
 
-export interface SerialPortFilter {
-  usbVendorId?: number;
-  usbProductId?: number;
-}
-
-export interface SerialPortRequestOptions {
-  filters?: Array<SerialPortFilter>;
-  polyfillOptions?: SerialPolyfillOptions;
-}
-
 const kSetLineCoding = 0x20;
 const kSetControlLineState = 0x22;
 const kSendBreak = 0x23;
