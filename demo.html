@@ -84,16 +84,15 @@
   });
 
   str2ab = function(str) {
-    var buf = new ArrayBuffer(str.length); // 2 bytes for each char
-    var bufView = new Uint8Array(buf);
+    var buf = new Uint8Array(str.length); // 1 byte for each char
     for (var i=0, strLen=str.length; i < strLen; i++) {
-      bufView[i] = str.charCodeAt(i);
+      buf[i] = str.charCodeAt(i);
     }
     return buf;
   }
 
   ab2str = function(buf) {
-    return String.fromCharCode.apply(null, new Uint8Array(buf));
+    return String.fromCharCode.apply(null, buf);
   }
 
 //send the text out after converting it to an array buffer.
@@ -111,7 +110,7 @@
   let getButton = document.getElementById('get');
   getButton.addEventListener('click', async () => {
     reader.read().then(({value}) => {
-        receivedText += ab2str(value.buffer);
+        receivedText += ab2str(value);
         document.getElementById("ReceivedText").innerHTML= receivedText
       },
       error => {console.error('error from read', error)}

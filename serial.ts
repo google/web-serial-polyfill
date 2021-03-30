@@ -118,16 +118,27 @@ class UsbEndpointUnderlyingSource implements UnderlyingSource<Uint8Array> {
    *
    * @param {ReadableStreamDefaultController} controller
    */
-  pull(controller: ReadableStreamDefaultController): void {
-    const chunkSize = controller.desiredSize || 64;
-    this.device_.transferIn(this.endpoint_.endpointNumber, chunkSize).then(
-        (result) => {
-          controller.enqueue(result.data);
-        },
-        (error) => {
-          controller.error(error.toString());
+  pull(controller: ReadableStreamDefaultController<Uint8Array>): void {
+    (async (): Promise<void> => {
+      const chunkSize = controller.desiredSize ?? this.endpoint_.packetSize;
+      try {
+        const result = await this.device_.transferIn(
+            this.endpoint_.endpointNumber, chunkSize);
+        if (result.status != 'ok') {
+          controller.error(`USB error: ${result.status}`);
           this.onError_();
-        });
+        }
+        if (result.data?.buffer) {
+          const chunk = new Uint8Array(
+              result.data.buffer, result.data.byteOffset,
+              result.data.byteLength);
+          controller.enqueue(chunk);
+        }
+      } catch (error) {
+        controller.error(error.toString());
+        this.onError_();
+      }
+    })();
   }
 }
 
@@ -227,7 +238,7 @@ export class SerialPort {
    */
   public get readable(): ReadableStream<Uint8Array> | null {
     if (!this.readable_ && this.device_.opened) {
-      this.readable_ = new ReadableStream(
+      this.readable_ = new ReadableStream<Uint8Array>(
           new UsbEndpointUnderlyingSource(
               this.device_, this.inEndpoint_, () => {
                 this.readable_ = null;
