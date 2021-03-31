@@ -17,20 +17,6 @@
  */
 'use strict';
 
-type ParityType = 'none' | 'even' | 'odd' | 'mark' | 'space';
-
-interface SerialOptions {
-  baudRate: number;
-  dataBits: number;
-  stopBits: number;
-  parity: ParityType;
-  bufferSize: number;
-  rtscts: boolean;
-  xon: boolean;
-  xoff: boolean;
-  xany: boolean;
-}
-
 interface SerialOutputSignals {
   dtr?: boolean;
   rts?: boolean;
@@ -51,23 +37,17 @@ const kSetLineCoding = 0x20;
 const kSetControlLineState = 0x22;
 const kSendBreak = 0x23;
 
-const kDefaultSerialOptions: SerialOptions = {
-  baudRate: 115200,
-  dataBits: 8,
-  stopBits: 1,
-  parity: 'none',
-  bufferSize: 255,
-  rtscts: false,
-  xon: false,
-  xoff: false,
-  xany: false,
-};
+const kDefaultBufferSize = 255;
+const kDefaultDataBits = 8;
+const kDefaultParity = 'none';
+const kDefaultStopBits = 1;
+
 const kAcceptableDataBits = [16, 8, 7, 6, 5];
 const kAcceptableStopBits = [1, 2];
-const kAcceptableParity = ['none', 'even', 'mark', 'odd', 'space'];
+const kAcceptableParity = ['none', 'even', 'odd'];
 
 const kParityIndexMapping: ParityType[] =
-    ['none', 'odd', 'even', 'mark', 'space'];
+    ['none', 'odd', 'even'];
 const kStopBitsIndexMapping = [1, 1.5, 2];
 
 const kDefaultPolyfillOptions = {
@@ -259,7 +239,7 @@ export class SerialPort {
                 this.readable_ = null;
               }),
           new ByteLengthQueuingStrategy({
-            highWaterMark: this.serialOptions_.bufferSize,
+            highWaterMark: this.serialOptions_.bufferSize ?? kDefaultBufferSize,
           }));
     }
     return this.readable_;
@@ -278,7 +258,7 @@ export class SerialPort {
                 this.writable_ = null;
               }),
           new ByteLengthQueuingStrategy({
-            highWaterMark: this.serialOptions_.bufferSize,
+            highWaterMark: this.serialOptions_.bufferSize ?? kDefaultBufferSize,
           }));
     }
     return this.writable_;
@@ -287,12 +267,12 @@ export class SerialPort {
   /**
    * a function that opens the device and claims all interfaces needed to
    * control and communicate to and from the serial device
-   * @param {SerialOptions} options Optional object containing serial options
+   * @param {SerialOptions} options Object containing serial options
    * @return {Promise<void>} A promise that will resolve when device is ready
    * for communication
    */
-  public async open(options?: SerialOptions): Promise<void> {
-    this.serialOptions_ = {...kDefaultSerialOptions, ...options};
+  public async open(options: SerialOptions): Promise<void> {
+    this.serialOptions_ = options;
     this.validateOptions();
 
     try {
@@ -444,7 +424,10 @@ export class SerialPort {
    * @return {boolean} A boolean that reflects whether the data bits setting is
    * valid
    */
-  private isValidDataBits(dataBits: number): boolean {
+  private isValidDataBits(dataBits: number | undefined): boolean {
+    if (typeof dataBits === 'undefined') {
+      return true;
+    }
     return kAcceptableDataBits.includes(dataBits);
   }
 
@@ -454,7 +437,10 @@ export class SerialPort {
    * @return {boolean} A boolean that reflects whether the stop bits setting is
    * valid
    */
-  private isValidStopBits(stopBits: number): boolean {
+  private isValidStopBits(stopBits: number | undefined): boolean {
+    if (typeof stopBits === 'undefined') {
+      return true;
+    }
     return kAcceptableStopBits.includes(stopBits);
   }
 
@@ -463,7 +449,10 @@ export class SerialPort {
    * @param {string} parity the parity to check
    * @return {boolean} A boolean that reflects whether the parity is valid
    */
-  private isValidParity(parity: ParityType): boolean {
+  private isValidParity(parity: ParityType | undefined): boolean {
+    if (typeof parity === 'undefined') {
+      return true;
+    }
     return kAcceptableParity.includes(parity);
   }
 
@@ -477,9 +466,12 @@ export class SerialPort {
     const view = new DataView(buffer);
     view.setUint32(0, this.serialOptions_.baudRate, true);
     view.setUint8(
-        4, kStopBitsIndexMapping.indexOf(this.serialOptions_.stopBits));
-    view.setUint8(5, kParityIndexMapping.indexOf(this.serialOptions_.parity));
-    view.setUint8(6, this.serialOptions_.dataBits);
+        4, kStopBitsIndexMapping.indexOf(
+            this.serialOptions_.stopBits ?? kDefaultStopBits));
+    view.setUint8(
+        5, kParityIndexMapping.indexOf(
+            this.serialOptions_.parity ?? kDefaultParity));
+    view.setUint8(6, this.serialOptions_.dataBits ?? kDefaultDataBits);
 
     const result = await this.device_.controlTransferOut({
       'requestType': 'class',
@@ -491,26 +483,6 @@ export class SerialPort {
     if (result.status != 'ok') {
       throw new DOMException('NetworkError', 'Failed to set line coding.');
     }
-  }
-
-  /**
-   * Takes in an Array Buffer that contains Line Coding according to the USB
-   * CDC spec
-   * @param {ArrayBuffer} buffer The data structured accoding to the spec
-   * @return {object} The options
-   */
-  private readLineCoding(buffer: ArrayBuffer): SerialOptions {
-    const options: SerialOptions = this.serialOptions_;
-    const view = new DataView(buffer);
-    options.baudRate = view.getUint32(0, true);
-    options.stopBits = view.getUint8(4) < kStopBitsIndexMapping.length ?
-        kStopBitsIndexMapping[view.getUint8(4)] :
-        1;
-    options.parity = view.getUint8(5) < kParityIndexMapping.length ?
-        kParityIndexMapping[view.getUint8(5)] :
-        'none';
-    options.dataBits = view.getUint8(6);
-    return options;
   }
 }
 

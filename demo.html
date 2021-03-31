@@ -47,7 +47,7 @@
       if(serialDevices.length > 0) {
         //probably want to do some checks here to make sure you get the correct device.  We are just grabbing the first for the demo
         mySerial = serialDevices[0];
-        await mySerial.open();
+        await mySerial.open({baudRate: 115200});
         reader = mySerial.readable.getReader();
         writer = mySerial.writable.getWriter();
       }
@@ -61,7 +61,7 @@
 
     serial.requestPort().then(async (serialPort) => {
       mySerial = serialPort;
-      await mySerial.open();
+      await mySerial.open({baudRate: 115200});
       reader = mySerial.readable.getReader();
       writer = mySerial.writable.getWriter();
     })
@@ -75,7 +75,7 @@
     // navigator.usb.requestDevice({ 'filters': filters }).then(
     //   async (device) => {
     //     mySerial = new serial.SerialPort(device);
-    //     await mySerial.open();
+    //     await mySerial.open({baudRate: 115200});
     //
     //     reader = mySerial.readable.getReader();
     //     writer = mySerial.writable.getWriter();
