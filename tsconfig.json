@@ -6,6 +6,7 @@
     "sourceMap": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
-    "target": "es2017"
+    "target": "es2017",
+    "declaration": true
   }
 }
