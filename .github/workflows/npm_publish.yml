@@ -1,0 +1,21 @@
+# This workflow will do a clean install of node dependencies, build the source code and publish the code to the web-serial-polyfill npm package
+# For more information see: https://github.com/marketplace/actions/npm-publish
+
+name: NPM publish
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - run: npm install
+    - run: npm run build
+    - uses: JS-DevTools/npm-publish@v1
+        with:
+          token: ${{ secrets.NPM_TOKEN }}
