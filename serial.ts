@@ -244,7 +244,7 @@ export class SerialPort {
                 this.readable_ = null;
               }),
           new ByteLengthQueuingStrategy({
-            highWaterMark: this.serialOptions_.bufferSize ?? kDefaultBufferSize,
+              highWaterMark: this.serialOptions_.bufferSize ?? this.inEndpoint_.packetSize > kDefaultBufferSize ? this.inEndpoint_.packetSize : kDefaultBufferSize,
           }));
     }
     return this.readable_;
@@ -263,7 +263,7 @@ export class SerialPort {
                 this.writable_ = null;
               }),
           new ByteLengthQueuingStrategy({
-            highWaterMark: this.serialOptions_.bufferSize ?? kDefaultBufferSize,
+            highWaterMark: this.serialOptions_.bufferSize ?? this.outEndpoint_.packetSize > kDefaultBufferSize ? this.outEndpoint_.packetSize : kDefaultBufferSize,
           }));
     }
     return this.writable_;
