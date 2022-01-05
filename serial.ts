@@ -119,8 +119,8 @@ class UsbEndpointUnderlyingSource implements UnderlyingSource<Uint8Array> {
    * @param {ReadableStreamDefaultController} controller
    */
   pull(controller: ReadableStreamDefaultController<Uint8Array>): void {
-    (async (): Promise<void> => {
-      const chunkSize = controller.desiredSize ?? this.endpoint_.packetSize;
+    (async (): Promise<void> => {        
+      const chunkSize = !controller.desiredSize || controller.desiredSize < this.endpoint_.packetSize ? this.endpoint_.packetSize : Math.ceil(this.endpoint_.packetSize / controller.desiredSize) * this.endpoint_.packetSize;
       try {
         const result = await this.device_.transferIn(
             this.endpoint_.endpointNumber, chunkSize);
@@ -244,7 +244,7 @@ export class SerialPort {
                 this.readable_ = null;
               }),
           new ByteLengthQueuingStrategy({
-              highWaterMark: this.serialOptions_.bufferSize ?? this.inEndpoint_.packetSize > kDefaultBufferSize ? this.inEndpoint_.packetSize : kDefaultBufferSize,
+              highWaterMark: this.serialOptions_.bufferSize ?? kDefaultBufferSize,
           }));
     }
     return this.readable_;
@@ -263,7 +263,7 @@ export class SerialPort {
                 this.writable_ = null;
               }),
           new ByteLengthQueuingStrategy({
-            highWaterMark: this.serialOptions_.bufferSize ?? this.outEndpoint_.packetSize > kDefaultBufferSize ? this.outEndpoint_.packetSize : kDefaultBufferSize,
+              highWaterMark: this.serialOptions_.bufferSize ?? kDefaultBufferSize,
           }));
     }
     return this.writable_;
