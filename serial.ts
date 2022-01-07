@@ -122,12 +122,8 @@ class UsbEndpointUnderlyingSource implements UnderlyingSource<Uint8Array> {
     (async (): Promise<void> => {
       let chunkSize;
       if (controller.desiredSize) {
-        if (controller.desiredSize < this.endpoint_.packetSize) {
-          chunkSize = this.endpoint_.packetSize;
-        } else {
-          const d = controller.desiredSize / this.endpoint_.packetSize;
-          chunkSize = Math.ceil(d) * this.endpoint_.packetSize;
-        }
+        const d = controller.desiredSize / this.endpoint_.packetSize;
+        chunkSize = Math.ceil(d) * this.endpoint_.packetSize;
       } else {
         chunkSize = this.endpoint_.packetSize;
       }
