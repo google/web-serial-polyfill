@@ -120,7 +120,14 @@ class UsbEndpointUnderlyingSource implements UnderlyingSource<Uint8Array> {
    */
   pull(controller: ReadableStreamDefaultController<Uint8Array>): void {
     (async (): Promise<void> => {
-      const chunkSize = controller.desiredSize ?? this.endpoint_.packetSize;
+      let chunkSize;
+      if (controller.desiredSize) {
+        const d = controller.desiredSize / this.endpoint_.packetSize;
+        chunkSize = Math.ceil(d) * this.endpoint_.packetSize;
+      } else {
+        chunkSize = this.endpoint_.packetSize;
+      }
+
       try {
         const result = await this.device_.transferIn(
             this.endpoint_.endpointNumber, chunkSize);
