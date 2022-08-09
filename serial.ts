@@ -18,7 +18,7 @@
 'use strict';
 
 export enum SerialPolyfillProtocol {
-  UsbCdcAcm,
+  UsbCdcAcm, // eslint-disable-line no-unused-vars
 }
 
 export interface SerialPolyfillOptions {
@@ -94,10 +94,12 @@ function findEndpoint(iface: USBInterface, direction: USBDirection):
  *
  * [1]: https://streams.spec.whatwg.org/#underlying-source-api
  */
-class UsbEndpointUnderlyingSource implements UnderlyingSource<Uint8Array> {
+class UsbEndpointUnderlyingSource implements UnderlyingByteSource {
   private device_: USBDevice;
   private endpoint_: USBEndpoint;
   private onError_: () => void;
+
+  type: 'bytes';
 
   /**
    * Constructs a new UnderlyingSource that will pull data from the specified
@@ -108,6 +110,7 @@ class UsbEndpointUnderlyingSource implements UnderlyingSource<Uint8Array> {
    * @param {function} onError function to be called on error
    */
   constructor(device: USBDevice, endpoint: USBEndpoint, onError: () => void) {
+    this.type = 'bytes';
     this.device_ = device;
     this.endpoint_ = endpoint;
     this.onError_ = onError;
@@ -116,9 +119,9 @@ class UsbEndpointUnderlyingSource implements UnderlyingSource<Uint8Array> {
   /**
    * Reads a chunk of data from the device.
    *
-   * @param {ReadableStreamDefaultController} controller
+   * @param {ReadableByteStreamController} controller
    */
-  pull(controller: ReadableStreamDefaultController<Uint8Array>): void {
+  pull(controller: ReadableByteStreamController): void {
     (async (): Promise<void> => {
       let chunkSize;
       if (controller.desiredSize) {
@@ -250,9 +253,9 @@ export class SerialPort {
               this.device_, this.inEndpoint_, () => {
                 this.readable_ = null;
               }),
-          new ByteLengthQueuingStrategy({
+          {
             highWaterMark: this.serialOptions_.bufferSize ?? kDefaultBufferSize,
-          }));
+          });
     }
     return this.readable_;
   }
