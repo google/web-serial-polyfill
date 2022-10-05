@@ -336,6 +336,16 @@ export class SerialPort {
   }
 
   /**
+   * Forgets the port.
+   *
+   * @return {Promise<void>} A promise that will resolve when the port is
+   * forgotten.
+   */
+  public async forget(): Promise<void> {
+    return this.device_.forget();
+  }
+
+  /**
    * A function that returns properties of the device.
    * @return {SerialPortInfo} Device properties.
    */
