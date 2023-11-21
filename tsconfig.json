@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
+    "module": "es2015",
     "lib": ["es2017"],
     "outDir": "./dist/",
     "sourceMap": true,
